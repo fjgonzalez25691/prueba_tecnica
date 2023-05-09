@@ -74,11 +74,20 @@ class DetallePedidoSimpleSerializer(serializers.ModelSerializer):
             'articulo',
             'cantidad',
         )
+        
+class DetalleModificarPedidoSerializer(serializers.Serializer):
+    """Serializador para modificar detalles de pedidos"""
+    articulo=serializers.IntegerField()
+    cantidad=serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2 
+    )
     
 class ProcesoModificarPedidoSerializer(serializers.ModelSerializer):
     """Serializador para el proceso de venta"""
         
     detalles = serializers.SerializerMethodField()
+    
     
     class Meta:
         model = Pedido
@@ -90,6 +99,21 @@ class ProcesoModificarPedidoSerializer(serializers.ModelSerializer):
         consulta = DetallePedido.objects.articulos_por_pedido(obj.id)
         articulos_serializados = DetallePedidoSimpleSerializer(consulta, many=True).data
         return articulos_serializados
-
     
+class ProcesoModificarPedidoSerializerPut(serializers.Serializer):
+    """Serializador para el proceso de venta"""
+
+    fecha_pedido = serializers.DateTimeField()
+    detalles = DetalleModificarPedidoSerializer(many=True)
+    
+class PedidoEliminarSerializer(serializers.ModelField):
+    """Serializador para el proceso de eliminar"""
+    class Meta:
+        model = Pedido
+        fields = '__all__'
+
+class ArticulosDetalleSerializer2(serializers.Serializer):
+    """Serializador de Articulos"""
+    num_pedido = serializers.IntegerField()
+    articulo = serializers.IntegerField()
     
