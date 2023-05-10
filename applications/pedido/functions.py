@@ -19,4 +19,7 @@ def recalcular_importe_pedido(pedido):
     pedido.importe_total_neto = total_importe + total_impuestos
     pedido.save()
     
+def verificar_articulo_existe(art):
+    if Articulo.objects.filter(id=art).exists():
+        pass
     

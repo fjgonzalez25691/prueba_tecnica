@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from . models import Pedido, DetallePedido
-from applications.articulo.models import Articulo
+
 
 
 class ArticulosDetalleSerializer(serializers.Serializer):
@@ -112,8 +112,5 @@ class PedidoEliminarSerializer(serializers.ModelField):
         model = Pedido
         fields = '__all__'
 
-class ArticulosDetalleSerializer2(serializers.Serializer):
-    """Serializador de Articulos"""
-    num_pedido = serializers.IntegerField()
-    articulo = serializers.IntegerField()
+
     

@@ -1,7 +1,8 @@
 from django.db import models
-from django.contrib.postgres.aggregates import ArrayAgg
-#
-from django.db.models import Sum, F, Prefetch
+
+from django.db.models import F
+
+
 
 
 class DetallePedidoManager(models.Manager):
@@ -13,18 +14,22 @@ class DetallePedidoManager(models.Manager):
         ).order_by('cantidad', 'articulo__id')
         return consulta
     
-    def linea_pedido_update(self):
-        consulta = self.values(
+    def linea_pedido_valorada(self, num_pedido):
+        consulta = self.filter(num_pedido = num_pedido).annotate(
+            total_linea=F('articulo__precio_bruto')*F('cantidad'),
+            total_imp= F('articulo__precio_bruto')*F('cantidad')*(1+F('articulo__impuesto'))
+        ).values(      
+        
             "articulo__id",
             "cantidad",
             "articulo__precio_bruto",
-            "articulo__impuesto"            
+            "articulo__impuesto" ,
+            "total_linea",
+            "total_linea_bruta"
         )
-        return consulta
-    
-        
-         
-# >>> Pedido.objects.filter(id=3).values("importe_total_bruto", "importe_total_neto", "lineaPedido__num_pedido", #"lineaPedido__cantidad", "lineaPedido__articulo")   
+        return consulta  
+             
+
 class PedidoManager(models.Manager):
     def linea_pedido(self):
         #Nos devuelve el contendio del detalle de la venta filtrado por 'id'
@@ -36,27 +41,4 @@ class PedidoManager(models.Manager):
         )
         return consulta
     
-    '''def linea_pedido_agregada(self):
-     
-        consulta_agregada = self.values(
-           "lineaPedido__cantidad",
-           "lineaPedido__articulo__nombre",
-        )
-        lineas_agregadas = []
-        for linea_agregada in consulta_agregada:
-            lineas_agregadas.append(linea_agregada)
-            
-        consulta = self.annotate(
-            lineas_agregadas,
-        ).values(
-            "importe_total_bruto",
-            "importe_total_neto",
-            
-        )            
-        
-        return consulta'''
-        
-   
-        
-       
-       
+    

@@ -1,12 +1,13 @@
 from time import sleep
+
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-
 from django.shortcuts import render
-from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
-from rest_framework import generics, status
+
+from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 
@@ -34,7 +35,6 @@ from .serializers import(
     ProcesoModificarPedidoSerializerPut,
     PedidoEliminarSerializer,
     ArticulosDetalleSerializer,
-    ArticulosDetalleSerializer2, 
     ) 
 
 from .managers import PedidoManager
@@ -55,7 +55,7 @@ class RegistrarPedidoAPIView(CreateAPIView):
     def create(self,request, *args, **kwargs):
         my_serializer = ProcesoPedidoSerializer(data=request.data)
         my_serializer.is_valid(raise_exception=True)
-        #
+        # Creamos el pedido para poder grabar el número de pedido
         try:
             pedido = Pedido.objects.create(
                 fecha_pedido=timezone.now(),
@@ -67,9 +67,10 @@ class RegistrarPedidoAPIView(CreateAPIView):
         
             articulos = my_serializer.validated_data['articulos']
             total_importe = 0
-            #
+            # Vamos a crear una lista para hacer un bulk-create
             detalles_pedido = []
             for articulo in articulos:
+                # si hay algún articulo que no existe generamos una excepción
                 try:
                     art = Articulo.objects.get(id=articulo['pk'])   
                     detalle_pedido =  DetallePedido(
@@ -82,18 +83,21 @@ class RegistrarPedidoAPIView(CreateAPIView):
                     detalles_pedido.append(detalle_pedido)
                 except ObjectDoesNotExist:            
                     raise Exception
-                
+        # Si el articulo no existe borramos el pedido       
         except Exception as ex:
-            pedido.delete()  #Si el pedido no existe lo borramos.               
+            pedido.delete()              
             return Response({'msj': 'el articulo no existe'})
-                                            
+        
+        # Si todo ha ido bien grabamos el DetallePedido                                  
         DetallePedido.objects.bulk_create(detalles_pedido)
                 
+        # recalculamos los campos de la tabla pedido con el importe.
         recalcular_importe_pedido(pedido.id)
         
         return Response({'msj': 'pedido registrado'})
 
 class PedidoReporteTodosAPIView(ListAPIView):
+    '''Vista para listar los pedidos'''
     serializer_class = PedidoReporteSerializer
     
     queryset = Pedido.objects.all()
@@ -145,23 +149,27 @@ class PedidoModificarAPIView(APIView):
         detalles_json = my_serializer.validated_data['detalles']
                 
         for detalle_json in detalles_json:
-            # recuperamos los datos del artículo que viene en cada línea de pedido
-            art = Articulo.objects.get(id=detalle_json['articulo']) 
-            # si el artículo que recibimos del serializador está en el detalle actualizamos
-            try:
-                detalle_pedido = DetallePedido.objects.get(num_pedido=pk, articulo=detalle_json['articulo'])
-                detalle_pedido.cantidad = detalle_json['cantidad']
-                detalle_pedido.save()
-                importe_linea = detalle_json['cantidad']*art.precio_bruto
-            # Si no está en la lista, creamos uno nuevo
-            except ObjectDoesNotExist:
-                detalle_pedido = DetallePedido(
-                    num_pedido=mi_pedido,
-                    articulo=art,
-                    cantidad=detalle_json['cantidad']
-                )
-                importe_linea = detalle_json['cantidad']*art.precio_bruto
-                detalle_pedido.save()
+            # Verificamos que el articulo existe
+            if Articulo.objects.filter(id=detalle_json['articulo']).exists():
+                # recuperamos los datos del artículo que viene en cada línea de pedido
+                art = Articulo.objects.get(id=detalle_json['articulo']) 
+                # Si en DetallePedido ya está el articulo, solamente modificamos cantidad.
+                try:
+                    detalle_pedido = DetallePedido.objects.get(num_pedido=pk, articulo=detalle_json['articulo'])
+                    detalle_pedido.cantidad = detalle_json['cantidad']
+                    detalle_pedido.save()
+                    
+                # Si no está en la lista, creamos una nueva línea
+                except ObjectDoesNotExist:              
+                        detalle_pedido = DetallePedido(
+                            num_pedido=mi_pedido,
+                            articulo=art,
+                            cantidad=detalle_json['cantidad']
+                        )
+                        detalle_pedido.save()
+            else:
+                # en el caso de que no exisa
+                 return Response({'msj': 'el articulo no existe'}, status=status.HTTP_400_BAD_REQUEST)              
         
         # Recalculamos los importes. Tenemos que recalcular todos porque puede haber artículos
         # No modificados.
@@ -170,11 +178,25 @@ class PedidoModificarAPIView(APIView):
         return Response({'msj': 'pedido modificado'})
     
 class EliminarPedidoAPIDeleteView(DestroyAPIView):
+    '''Vista para eliminar pedido mediante pk de url'''
     serializer_class = PedidoEliminarSerializer
     queryset = Pedido.objects.all()
-    lookup_field = 'pk ' # identificador único del pedido a eliminar
+    
+    def destroy(self, request, *args, **kwargs):
+        # Verificamos que existe el pedido antes de eliminar.
+        try:
+            instance = self.get_object()
+        except NotFound:
+             # Si no existe devovlemos esta respuesta
+            return Response({'msj': 'El pedido no existe'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Si existe continuamos con el método destroy
+        instance.delete()
+        return Response({'msj': 'pedido eliminado'}, status=status.HTTP_204_NO_CONTENT)
+    
     
 class EliminarDetallePedidoAPIView(APIView):
+    '''Vista para eliminar una línea del Pedido'''
     
     def get(self, request, id_pedido, id_articulo):
         try:
@@ -190,9 +212,10 @@ class EliminarDetallePedidoAPIView(APIView):
         
         except ObjectDoesNotExist:
             
-             return Response({'msj': 'no existe esta línea de pedido'}, status=status.HTTP_404_NOT_FOUND)
+             return Response({'msj': 'no existe esta línea de pedido'}, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request, id_pedido, id_articulo):
+        # Añado el código para el proceso de borrado de la línea
         try:
             linea_pedido = DetallePedido.objects.get(
                 num_pedido= id_pedido,

@@ -4,7 +4,7 @@ from django.conf import settings
 # Vamos a importar TimeStampedModel para el registro autmático de fechas.
 from model_utils.models import TimeStampedModel
 #
-from . managers import ArticuloManager
+
 
 
 class Articulo(TimeStampedModel):
@@ -34,7 +34,7 @@ class Articulo(TimeStampedModel):
         default=0.21
     )
     
-    objects = ArticuloManager()
+
     
     class Meta:
         verbose_name = 'Artículo'

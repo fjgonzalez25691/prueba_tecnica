@@ -27,11 +27,6 @@ urlpatterns = [
         views.ArticuloDeleteAPIView.as_view(),
         name='articulos-eliminar'
     ),
-     path(
-        'api/articulos/filtro_precio',
-        views.ArticuloListarPrecioFiltradoAPIView.as_view(),
-        name='articulos-filtro-precio'
-    ),
     
     
 ]
